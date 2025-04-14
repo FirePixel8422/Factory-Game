@@ -12,7 +12,8 @@ public class GridManager : MonoBehaviour
 
     private NativeHashMap<int, GridCell> grid;
 
-    private float3 gridToCenterOffset;
+    [SerializeField] private int lastSelectedGridCellGridId = -10;
+    [SerializeField] private Transform cube;
 
 
 
@@ -22,11 +23,10 @@ public class GridManager : MonoBehaviour
         SetupGrid();
     }
 
+
     [BurstCompile]
     private void SetupGrid()
     {
-        gridToCenterOffset = new float3(gridSize.x * 0.5f + 0.5f, 0f, gridSize.z * 0.5f + 0.5f);
-
         int gridLength = gridSize.x * gridSize.y * gridSize.z;
 
         grid = new NativeHashMap<int, GridCell>(gridLength, Allocator.Persistent);
@@ -50,14 +50,25 @@ public class GridManager : MonoBehaviour
 
 
 
+    [BurstCompile]
     private void Update()
     {
         Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
 
         if (Physics.Raycast(ray, out RaycastHit hit))
         {
-            GridCell gridCell = MouseWorldToGridCell(hit.point);
-            Debug.Log($"Grid Cell: {gridCell.gridId}");
+            if (GridCellFromWorldPoint(hit.point, out GridCell gridCell))
+            {
+                cube.position = hit.point;
+
+                if (gridCell.gridId != lastSelectedGridCellGridId)
+                {
+                    lastSelectedGridCellGridId = gridCell.gridId;
+
+                    gridCell.state = CellState.Selected;
+                    grid[gridCell.gridId] = gridCell;
+                }
+            }
         }
     }
 
@@ -67,17 +78,24 @@ public class GridManager : MonoBehaviour
     #region Helper Methods
 
     [BurstCompile]
-    private GridCell MouseWorldToGridCell(Vector3 worldPos)
+    public bool GridCellFromWorldPoint(float3 worldPosition, out GridCell gridCell)
     {
-        int gridId = GridPosToGridId((int3)math.floor((float3)worldPos + gridToCenterOffset));
+        float percentX = (worldPosition.x + gridSize.x * 0.5F) / gridSize.x;
+        float percentZ = (worldPosition.z + gridSize.z * 0.5F) / gridSize.z;
 
-        if (grid.TryGetValue(gridId, out GridCell cell))
+        if (percentX < 0 || percentX > 1 || percentZ < 0 || percentZ > 1)
         {
-            return cell;
+            gridCell = GridCell.Uninitialized;
+            return false;
         }
 
-        return GridCell.Empty;
+        int x = (int)math.round((gridSize.x - 1) * percentX);
+        int z = (int)math.round((gridSize.z - 1) * percentZ);
+
+        gridCell = grid[GridPosToGridId(new int3(x, 0, z))];
+        return true;
     }
+
 
     [BurstCompile]
     private int3 GridIdToGridPos(int gridId)
@@ -115,6 +133,15 @@ public class GridManager : MonoBehaviour
             foreach (var item in grid)
             {
                 int3 gridPos = GridIdToGridPos(item.Key);
+
+                if(lastSelectedGridCellGridId == item.Key)
+                {
+                    Gizmos.color = Color.red;
+                }
+                else
+                {
+                    Gizmos.color = Color.white;
+                }
 
                 Gizmos.DrawWireCube(new Vector3(gridPos.x - halfXOffset, gridPos.y, gridPos.z - halfZOffset), Vector3.one);
 

@@ -25,5 +25,5 @@ public struct GridCell
         orientation = CellOrientation.Left;
     }
 
-    public static GridCell Empty => new GridCell(-1);
+    public static GridCell Uninitialized => new GridCell(-1);
 }
