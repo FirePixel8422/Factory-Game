@@ -7,7 +7,7 @@ using UnityEngine;
 public enum CellOrientation : byte
 {
     Left,
-    Right,
     Up,
+    Right,
     Down
 }
