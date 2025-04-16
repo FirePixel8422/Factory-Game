@@ -8,9 +8,12 @@ using UnityEngine;
 [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
 public class GridManager : MonoBehaviour
 {
+    private InstanceRenderer instanceRenderer;
+    [SerializeField] private Material mat;
+
     public int3 gridSize;
 
-    private NativeHashMap<int, GridCell> grid;
+    private NativeArray<GridCell> grid;
 
     [SerializeField] private CellOrientation beltLineOrientation;
 
@@ -23,6 +26,8 @@ public class GridManager : MonoBehaviour
     [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
     private void Start()
     {
+        instanceRenderer = new InstanceRenderer(mat);
+
         SetupGrid();
     }
 
@@ -31,7 +36,7 @@ public class GridManager : MonoBehaviour
     {
         int gridLength = gridSize.x * gridSize.y * gridSize.z;
 
-        grid = new NativeHashMap<int, GridCell>(gridLength, Allocator.Persistent);
+        grid = new NativeArray<GridCell>(gridLength, Allocator.Persistent);
 
 
         NativeReference<int3> gridSizeRef = new NativeReference<int3>(Allocator.TempJob);
@@ -50,10 +55,6 @@ public class GridManager : MonoBehaviour
     }
 
 
-
-
-    #region Player Input
-
     [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
     private void Update()
     {
@@ -67,6 +68,10 @@ public class GridManager : MonoBehaviour
             selectedGridCellGridId = -1;
         }
     }
+
+
+
+    #region Player Input
 
     [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
     private void OnLeftClick(Vector3 newMousPos)
@@ -196,6 +201,18 @@ public class GridManager : MonoBehaviour
 
 
 
+    private void OnDestroy()
+    {
+        if (grid.IsCreated)
+        {
+            grid.Dispose();
+        }
+
+        instanceRenderer.Dispose();
+    }
+
+
+
 #if UNITY_EDITOR
 
     [SerializeField] private bool drawGrid;
@@ -210,11 +227,11 @@ public class GridManager : MonoBehaviour
             float halfXOffset = gridSize.x * 0.5f - 0.5f;
             float halfZOffset = gridSize.z * 0.5f - 0.5f;
 
-            foreach (var item in grid)
+            for (int i = 0; i < grid.Length; i++)
             {
-                int3 gridPos = GridIdToGridPos(item.Key, gridSize);
+                int3 gridPos = GridIdToGridPos(i, gridSize);
 
-                if (item.Value.state == CellState.Selected)
+                if (grid[i].state == CellState.Selected)
                 {
                     Gizmos.color = Color.red;
                 }

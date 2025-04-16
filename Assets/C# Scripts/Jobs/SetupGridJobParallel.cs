@@ -9,7 +9,7 @@ using Unity.Mathematics;
 public struct SetupGridJobParallel : IJobParallelFor
 {
     [NativeDisableParallelForRestriction]
-    [WriteOnly][NoAlias] public NativeHashMap<int, GridCell> grid;
+    [WriteOnly][NoAlias] public NativeArray<GridCell> grid;
 
     [ReadOnly][NoAlias] public NativeReference<int3> gridSize;
 
@@ -19,6 +19,6 @@ public struct SetupGridJobParallel : IJobParallelFor
     {
         GridCell gridObject = new GridCell(index);
 
-        grid.Add(index, gridObject);
+        grid[index] = gridObject;
     }
 }

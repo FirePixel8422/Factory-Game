@@ -678,6 +678,7 @@ GameObject:
   - component: {fileID: 2070575584}
   - component: {fileID: 2070575583}
   - component: {fileID: 2070575585}
+  - component: {fileID: 2070575586}
   m_Layer: 0
   m_Name: BeltManager
   m_TagString: Untagged
@@ -725,15 +726,28 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b7e27c5a71df4ee42b443756dde937ca, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  mat: {fileID: 0}
   gridSize:
-    x: 10
-    y: 1
-    z: 10
+    x: 10000
+    y: 50
+    z: 10000
   beltLineOrientation: 0
   selectedGridCellGridId: -1
   oldMousePos: {x: 0, y: 0, z: 0}
   cube: {fileID: 897780212}
   drawGrid: 1
+--- !u!114 &2070575586
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2070575582}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3c9a5e04d429d604bb5e41de1ffbb543, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
