@@ -1,24 +1,20 @@
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
-using Unity.Mathematics;
-
 
 
 [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
-public struct SetupGridJobParallel : IJobParallelFor
+public struct IntArrayFillJobParallel : IJobParallelFor
 {
     [NativeDisableParallelForRestriction]
-    [WriteOnly][NoAlias] public NativeArray<GridCell> grid;
+    [WriteOnly][NoAlias] public NativeArray<int> array;
 
-    [ReadOnly][NoAlias] public NativeReference<int3> gridSize;
+    [WriteOnly][NoAlias] public int value;
 
 
     [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
     public void Execute(int index)
     {
-        GridCell gridObject = new GridCell(index);
-
-        grid[index] = gridObject;
+        array[index] = value;
     }
 }

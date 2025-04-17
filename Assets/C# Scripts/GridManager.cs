@@ -8,36 +8,52 @@ using UnityEngine;
 [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
 public class GridManager : MonoBehaviour
 {
-    private InstanceRenderer instanceRenderer;
+    [SerializeField] private InstanceRenderer instanceRenderer;
 
-
+    [SerializeField] private GameObject[] meshObjs;
     [SerializeField] private Material mat;
 
     public int3 gridSize;
 
     private NativeArray<GridCell> grid;
 
-    [SerializeField] private CellOrientation beltLineOrientation;
+    private CellOrientation beltLineOrientation;
 
-    [SerializeField] private int selectedGridCellGridId = -1;
-    [SerializeField] private Vector3 oldMousePos;
-    [SerializeField] private Transform cube;
+    private int selectedGridCellGridId = -1;
+    private Vector3 oldMousePos;
 
 
 
     [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
     private void Start()
     {
-        //instanceRenderer = new InstanceRenderer(mat);
+        int gridLength = gridSize.x * gridSize.y * gridSize.z;
 
-        SetupGrid();
+        SetupInstanceRenderer(gridLength);
+
+        SetupGrid(gridLength);
+    }
+
+
+    #region Setup Methods
+
+    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
+    private void SetupInstanceRenderer(int gridLength)
+    {
+        int meshCount = meshObjs.Length;
+
+        Mesh[] meshes = new Mesh[meshCount];
+        for (int i = 0; i < meshCount; i++)
+        {
+            meshes[i] = MeshCombiner.CombineMeshes(meshObjs[i]);
+        }
+
+        instanceRenderer = new InstanceRenderer(meshes, meshCount, mat, gridLength);
     }
 
     [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
-    private void SetupGrid()
+    private void SetupGrid(int gridLength)
     {
-        int gridLength = gridSize.x * gridSize.y * gridSize.z;
-
         grid = new NativeArray<GridCell>(gridLength, Allocator.Persistent);
 
 
@@ -56,6 +72,10 @@ public class GridManager : MonoBehaviour
         gridSizeRef.Dispose();
     }
 
+    #endregion
+
+
+
 
     [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
     private void Update()
@@ -64,13 +84,16 @@ public class GridManager : MonoBehaviour
         {
             OnLeftClick(Input.mousePosition);
         }
+        if (Input.GetMouseButton(1))
+        {
+            OnRightClick(Input.mousePosition);
+        }
 
         if (Input.GetMouseButtonUp(0))
         {
             selectedGridCellGridId = -1;
         }
     }
-
 
 
     #region Player Input
@@ -104,6 +127,8 @@ public class GridManager : MonoBehaviour
                         beltLineOrientation = GetCellOrientation(oldCell, newCell);
                         oldCell.orientation = beltLineOrientation;
 
+                        SetMesh(0, selectedGridCellGridId, GridIdToWorldPos(oldCell.gridId), oldCell.orientation);
+
                         grid[selectedGridCellGridId] = oldCell;
                     }
 
@@ -111,17 +136,64 @@ public class GridManager : MonoBehaviour
                     newCell.type = CellType.Conveyor;
                     newCell.orientation = beltLineOrientation;
 
-                    grid[newCell.gridId] = newCell;
-
                     selectedGridCellGridId = newCell.gridId;
 
-                    BeltManager.Instance.SpawnBelt(GridIdToWorldPos(newCell.gridId), newCell.orientation);
+                    grid[selectedGridCellGridId] = newCell;
+
+                    SetMesh(0, selectedGridCellGridId, GridIdToWorldPos(selectedGridCellGridId), newCell.orientation);
+                }
+            }
+        }
+    }
+
+
+    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
+    private void OnRightClick(Vector3 newMousPos)
+    {
+        //if mouse hasnt moved, return
+        if (newMousPos == oldMousePos) return;
+
+        //save mousePos
+        oldMousePos = newMousPos;
+
+        //shoot ray to world from mouse
+        Ray ray = Camera.main.ScreenPointToRay(newMousPos);
+
+        if (Physics.Raycast(ray, out RaycastHit hit))
+        {
+            //try get grid cell from hit world point
+            if (TryGetGridCellFromWorldPoint(hit.point, gridSize, out GridCell newCell))
+            {
+                //if the cell is different than the currentSelected cell
+                if (newCell.IsEmpty == false)
+                {
+                    //modify and save new cell
+                    newCell.type = CellType.Empty;
+
+                    grid[newCell.gridId] = newCell;
+
+                    selectedGridCellGridId = -1;
+
+                    RemoveMesh(0, newCell.gridId);
                 }
             }
         }
     }
 
     #endregion
+
+    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
+    public void SetMesh(int meshId, int cellId, float3 pos, CellOrientation orientation)
+    {
+        Matrix4x4 matrix = Matrix4x4.TRS(pos, Quaternion.Euler(0, (int)orientation * 90, 0), Vector3.one);
+        instanceRenderer.SetMeshInstanceMatrix(meshId, cellId, matrix);
+    }
+
+    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
+    public void RemoveMesh(int meshId, int cellId)
+    {
+        instanceRenderer.RemoveMeshInstanceMatrix(meshId, cellId);
+    }
 
 
 
