@@ -9,6 +9,8 @@ using UnityEngine;
 public class GridManager : MonoBehaviour
 {
     private InstanceRenderer instanceRenderer;
+
+
     [SerializeField] private Material mat;
 
     public int3 gridSize;
@@ -26,7 +28,7 @@ public class GridManager : MonoBehaviour
     [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
     private void Start()
     {
-        instanceRenderer = new InstanceRenderer(mat);
+        //instanceRenderer = new InstanceRenderer(mat);
 
         SetupGrid();
     }
@@ -208,7 +210,7 @@ public class GridManager : MonoBehaviour
             grid.Dispose();
         }
 
-        instanceRenderer.Dispose();
+        instanceRenderer?.Dispose();
     }
 
 

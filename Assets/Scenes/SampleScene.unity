@@ -728,9 +728,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   mat: {fileID: 0}
   gridSize:
-    x: 10000
+    x: 100
     y: 50
-    z: 10000
+    z: 100
   beltLineOrientation: 0
   selectedGridCellGridId: -1
   oldMousePos: {x: 0, y: 0, z: 0}

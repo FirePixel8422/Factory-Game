@@ -1,3 +1,4 @@
+using System;
 using Unity.Burst;
 using Unity.Collections;
 using UnityEngine;
@@ -22,10 +23,6 @@ public class InstanceRenderer
 
         UpdateScheduler.Register(OnUpdate);
     }
-    ~InstanceRenderer()
-    {
-        UpdateScheduler.Unregister(OnUpdate);
-    }
 
 
 
@@ -37,22 +34,25 @@ public class InstanceRenderer
     private NativeArray<Matrix4x4> meshInstanceMatrices;
     private NativeArray<int> meshInstanceMatrixCounts;
 
+    private int meshCount;
+    private int perMeshArraySize;
+
 
 
 
     public void Dispose()
     {
-        
+        UpdateScheduler.Unregister(OnUpdate);
     }
 
 
     [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
     private void OnUpdate()
     {
-        for (int meshIndex = 0; meshIndex < meshData.Length; meshIndex++)
+        for (int meshIndex = 0; meshIndex < meshes.Length; meshIndex++)
         {
             // Render the instances
-            Graphics.RenderMeshInstanced(renderParams, meshes[meshIndex], 0, meshInstanceMatrices, meshInstanceMatrixCounts[meshIndex], );
+            Graphics.RenderMeshInstanced(renderParams, meshes[meshIndex], 0, meshInstanceMatrices, meshInstanceMatrixCounts[meshIndex], meshIndex * perMeshArraySize);
         }
     }
 }
