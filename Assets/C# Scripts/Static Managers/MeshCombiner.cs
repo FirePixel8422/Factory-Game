@@ -21,6 +21,8 @@ public static class MeshCombiner
         };
         combinedMesh.CombineMeshes(combine, true, true);
 
+        combinedMesh.Optimize();
+
         combinedMesh.RecalculateBounds();
         combinedMesh.RecalculateNormals();
 

@@ -13,6 +13,8 @@ public class GridManager : MonoBehaviour
     [SerializeField] private GameObject[] meshObjs;
     [SerializeField] private Material mat;
 
+    [SerializeField] private int meshId;
+
     public int3 gridSize;
 
     private NativeArray<GridCell> grid;
@@ -32,6 +34,8 @@ public class GridManager : MonoBehaviour
         SetupInstanceRenderer(gridLength);
 
         SetupGrid(gridLength);
+
+        UpdateScheduler.Register(OnUpdate);
     }
 
 
@@ -78,7 +82,7 @@ public class GridManager : MonoBehaviour
 
 
     [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
-    private void Update()
+    public void OnUpdate()
     {
         if (Input.GetMouseButton(0))
         {
@@ -127,7 +131,7 @@ public class GridManager : MonoBehaviour
                         beltLineOrientation = GetCellOrientation(oldCell, newCell);
                         oldCell.orientation = beltLineOrientation;
 
-                        SetMesh(0, selectedGridCellGridId, GridIdToWorldPos(oldCell.gridId), oldCell.orientation);
+                        SetMesh(meshId, selectedGridCellGridId, GridIdToWorldPos(oldCell.gridId), oldCell.orientation);
 
                         grid[selectedGridCellGridId] = oldCell;
                     }
@@ -140,7 +144,7 @@ public class GridManager : MonoBehaviour
 
                     grid[selectedGridCellGridId] = newCell;
 
-                    SetMesh(0, selectedGridCellGridId, GridIdToWorldPos(selectedGridCellGridId), newCell.orientation);
+                    SetMesh(meshId, selectedGridCellGridId, GridIdToWorldPos(selectedGridCellGridId), newCell.orientation);
                 }
             }
         }
@@ -162,19 +166,17 @@ public class GridManager : MonoBehaviour
         if (Physics.Raycast(ray, out RaycastHit hit))
         {
             //try get grid cell from hit world point
-            if (TryGetGridCellFromWorldPoint(hit.point, gridSize, out GridCell newCell))
+            if (TryGetGridCellFromWorldPoint(hit.point, gridSize, out GridCell targetCell))
             {
                 //if the cell is different than the currentSelected cell
-                if (newCell.IsEmpty == false)
+                if (targetCell.IsEmpty == false)
                 {
-                    //modify and save new cell
-                    newCell.type = CellType.Empty;
-
-                    grid[newCell.gridId] = newCell;
+                    //reset cell
+                    grid[targetCell.gridId] = new GridCell(targetCell.gridId);
 
                     selectedGridCellGridId = -1;
 
-                    RemoveMesh(0, newCell.gridId);
+                    RemoveMesh(targetCell.gridId);
                 }
             }
         }
@@ -190,9 +192,9 @@ public class GridManager : MonoBehaviour
     }
 
     [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
-    public void RemoveMesh(int meshId, int cellId)
+    public void RemoveMesh(int cellId)
     {
-        instanceRenderer.RemoveMeshInstanceMatrix(meshId, cellId);
+        instanceRenderer.RemoveMeshInstanceMatrix(cellId);
     }
 
 
@@ -283,6 +285,8 @@ public class GridManager : MonoBehaviour
         }
 
         instanceRenderer?.Dispose();
+
+        UpdateScheduler.Unregister(OnUpdate);
     }
 
 
@@ -298,6 +302,12 @@ public class GridManager : MonoBehaviour
 
         if (drawGrid && Application.isPlaying)
         {
+            if (grid.Length > 10000)
+            {
+                Debug.LogWarning("You attempted to display way too many Gizmos, please lower the gridSize or disable the drawGrid bool");
+                return;
+            }
+
             float halfXOffset = gridSize.x * 0.5f - 0.5f;
             float halfZOffset = gridSize.z * 0.5f - 0.5f;
 
