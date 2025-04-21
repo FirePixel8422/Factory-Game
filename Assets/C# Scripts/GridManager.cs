@@ -82,7 +82,7 @@ public class GridManager : MonoBehaviour
 
 
     [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
-    public void OnUpdate()
+    private void OnUpdate()
     {
         if (Input.GetMouseButton(0))
         {

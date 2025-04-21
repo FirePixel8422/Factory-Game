@@ -4,26 +4,28 @@ using UnityEngine;
 
 public class Joint : MonoBehaviour
 {
-    public Joint childJoint;
+    public Vector3 rotationAxis;
 
-    [SerializeField] private Vector3 axis = Vector3.up;
+    public float minAngle = -90f;
+    public float maxAngle = 90f;
 
 
-    private void Start()
+    private float currentAngle = 0f;
+    public float CurrentAngle
     {
-       foreach(Transform child in transform)
-       {
-            if (child.TryGetComponent(out Joint joint))
+        get { return currentAngle; }
+        set
+        {
+            currentAngle = value;
+
+            if (currentAngle > 180)
             {
-                childJoint = joint;
-                break;
+                currentAngle -= 180;
             }
-       }
-    }
-
-
-    public void Rotate(float angle)
-    {
-        transform.Rotate(axis, angle);
+            else if (currentAngle < -180)
+            {
+                currentAngle += 180;
+            }
+        }
     }
 }
