@@ -1,10 +1,11 @@
-using Unity.Burst;
+using System.Runtime.CompilerServices;
 using Unity.Collections;
 using Unity.Jobs;
+using Unity.Jobs.LowLevel.Unsafe;
+using Unity.Mathematics;
 using UnityEngine;
 
 
-[BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
 [System.Serializable]
 public class InstanceRenderer
 {
@@ -30,8 +31,7 @@ public class InstanceRenderer
         UpdateScheduler.Register(OnUpdate);
     }
 
-
-    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
+    
     private void SetupMatrixData()
     {
         int totalArraySize = perMeshArraySize * meshCount;
@@ -59,7 +59,7 @@ public class InstanceRenderer
         matrices = new NativeArray<Matrix4x4>(totalArraySize, Allocator.Persistent);
         matrixCounts = new NativeArray<int>(meshCount, Allocator.Persistent);
 
-        visibleMeshMatrices = new NativeList<Matrix4x4>(perMeshArraySize, Allocator.Persistent);
+        culledInstanceMatrices = new NativeList<Matrix4x4>(perMeshArraySize, Allocator.Persistent);
 
         frustumPlanes = new NativeArray<FastFrustumPlane>(6, Allocator.Persistent);
 
@@ -73,14 +73,14 @@ public class InstanceRenderer
 
 
 
-    private Mesh[] meshes;
+    private readonly Mesh[] meshes;
 
-    private int meshCount;
-    private int perMeshArraySize;
+    private readonly int meshCount;
+    private readonly int perMeshArraySize;
 
     private RenderParams renderParams;
 
-    [Tooltip("Array consisting of multiple arrays, 1 for every mesh accesed by meshIndex multiplied by perMeshArraySize")]
+    [Tooltip("Flattened array that acts as multiple arrays, 1 for every mesh accesed by meshId multiplied by perMeshArraySize")]
     private NativeArray<Matrix4x4> matrices;
 
     [Tooltip("CellId to MatrixId")]
@@ -93,8 +93,8 @@ public class InstanceRenderer
     private NativeArray<int> matrixCounts;
 
 
-    [Tooltip("List that holds calculated matrices that are in camera frustum")]
-    private NativeList<Matrix4x4> visibleMeshMatrices;
+    [Tooltip("List that holds calculated matrices that are in camera frustum for target mesh instance")]
+    private NativeList<Matrix4x4> culledInstanceMatrices;
 
     private Camera cam;
     private Vector3 lastCamPos;
@@ -103,13 +103,12 @@ public class InstanceRenderer
     private NativeArray<FastFrustumPlane> frustumPlanes;
 
 
-    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
     private void OnUpdate()
     {
-        Matrix4x4 currentMatrix = cam.transform.localToWorldMatrix;
+        bool camMoved = cam.transform.position != lastCamPos || cam.transform.rotation != lastCamRot;
 
         //only if camera has moved or rotated, recalculate frustum planes
-        if (cam.transform.position != lastCamPos || cam.transform.rotation != lastCamRot)
+        if (camMoved)
         {
             lastCamPos = cam.transform.position;
             lastCamRot = cam.transform.rotation;
@@ -121,9 +120,10 @@ public class InstanceRenderer
             }
         }
 
-        for (int meshIndex = 0; meshIndex < meshCount; meshIndex++)
+
+        for (int meshId = 0; meshId < meshCount; meshId++)
         {
-            int meshInstanceCount = matrixCounts[meshIndex];
+            int meshInstanceCount = matrixCounts[meshId];
 
             //skip currentmesh if there are 0 instances of it (nothing to render)
             if (meshInstanceCount == 0)
@@ -131,59 +131,66 @@ public class InstanceRenderer
                 continue;
             }
 
-
-            //reset visibleMeshMatrices List to allow filling it with new data
-            visibleMeshMatrices.Clear();
-
             //Frustom Culling job
             FrustumCullingJobParallel frustomCullingJob = new FrustumCullingJobParallel
             {
-                meshBounds = meshes[meshIndex].bounds,
+                meshBounds = meshes[meshId].bounds,
                 frustumPlanes = frustumPlanes,
 
                 matrices = matrices,
-                startIndex = meshIndex * perMeshArraySize,
+                startIndex = meshId * perMeshArraySize,
 
-                visibleMatrices = visibleMeshMatrices.AsParallelWriter()
+                culledMatrices = culledInstanceMatrices.AsParallelWriter(),
             };
 
             frustomCullingJob.Schedule(meshInstanceCount, 1024).Complete();
 
-            //if no mesh instances are visible, skip rendering
-            if (visibleMeshMatrices.Length == 0)
+            //if no mesh instances are visible, skip rendering that mesh
+            if (culledInstanceMatrices.Length != 0)
             {
-                continue;
-            }
+                RenderMeshInstance(meshId);
 
-            //render the instances of currentmesh
-            Graphics.RenderMeshInstanced(renderParams, meshes[meshIndex], 0, visibleMeshMatrices.AsArray());
+                //reset visibleMeshMatrices List to allow filling it with new data
+                culledInstanceMatrices.Clear();
+            }
         }
 
-#if UNITY_EDITOR
-        //if (perMeshArraySize > 100)
-        //{
-        //    Debug.LogWarning("Attempted to display DEBUG data for too large arrays, please lower the gridSize or disable the debug array display");
-        //    return;
-        //}
+//#if UNITY_EDITOR
+//        if (perMeshArraySize > 100)
+//        {
+//            Debug.LogWarning("Attempted to display DEBUG data for too large arrays, please lower the gridSize or disable the debug array display");
+//            return;
+//        }
 
-        //DEBUG_matrices = matrices.ToArray();
-        //DEBUG_matrixKeys = matrixKeys.ToArray();
-        //DEBUG_cellIdKeys = cellIdKeys.ToArray();
-        //DEBUG_matrixCounts = matrixCounts.ToArray();
-#endif
+//        DEBUG_matrices = matrices.ToArray();
+//        DEBUG_matrixKeys = matrixKeys.ToArray();
+//        DEBUG_cellIdKeys = cellIdKeys.ToArray();
+//        DEBUG_matrixCounts = matrixCounts.ToArray();
+//        DEBUG_visibleMeshMatrices = culledInstanceMatrices.AsArray().ToArray();
+//#endif
+    }
+
+
+    /// <summary>
+    /// Render all instances of meshId with matrixData from <see cref="culledMatrices"/> starting at startId and rendering instanceCount amount of instances.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void RenderMeshInstance(int meshId)
+    {
+        //render the instances of currentmesh
+        Graphics.RenderMeshInstanced(renderParams, meshes[meshId], 0, culledInstanceMatrices.AsArray());
     }
 
 
 
 
 
-    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
-    public void SetMeshInstanceMatrix(int meshIndex, int cellId, Matrix4x4 matrix)
+    public void SetMeshInstanceMatrix(int meshId, int cellId, float4x4 matrix)
     {
         //if matrixKeys[cellId] == -1, there is no mesh for that cell, so assign a new matrix 
         if (matrixKeys[cellId] == -1)
         {
-            int matrixArrayIndex = meshIndex * perMeshArraySize + matrixCounts[meshIndex];
+            int matrixArrayIndex = meshId * perMeshArraySize + matrixCounts[meshId];
 
             //save matrix to nest spot in matrixArray
             matrices[matrixArrayIndex] = matrix;
@@ -195,7 +202,7 @@ public class InstanceRenderer
             matrixKeys[cellId] = matrixArrayIndex;
 
             //increment matrixCount for this mesh by 1
-            matrixCounts[meshIndex] += 1;
+            matrixCounts[meshId] += 1;
         }
         //if matrixKeys[cellId] has a value, modify the equivelenat matrix instead of asigning a new one
         else
@@ -204,13 +211,12 @@ public class InstanceRenderer
         }
     }
 
-    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
     public void RemoveMeshInstanceMatrix(int toRemoveCellId)
     {
         int toRemoveMatrixId = matrixKeys[toRemoveCellId];
-        int meshIndex = toRemoveMatrixId / perMeshArraySize;
+        int meshId = toRemoveMatrixId / perMeshArraySize;
 
-        int lastMatrixId = meshIndex * perMeshArraySize + matrixCounts[meshIndex] - 1;
+        int lastMatrixId = meshId * perMeshArraySize + matrixCounts[meshId] - 1;
         int lastCellId = cellIdKeys[lastMatrixId];
 
         //swap last matrix with the one to be removed
@@ -227,7 +233,7 @@ public class InstanceRenderer
         matrixKeys[toRemoveCellId] = -1;
 
         //update matrixCount for this mesh to reflect the removal
-        matrixCounts[meshIndex] -= 1;
+        matrixCounts[meshId] -= 1;
     }
 
 
@@ -242,7 +248,7 @@ public class InstanceRenderer
         matrixKeys.Dispose();
         cellIdKeys.Dispose();
         matrixCounts.Dispose();
-        visibleMeshMatrices.Dispose();
+        culledInstanceMatrices.Dispose();
         frustumPlanes.Dispose();
 
         UpdateScheduler.Unregister(OnUpdate);
@@ -252,8 +258,11 @@ public class InstanceRenderer
 
 
 #if UNITY_EDITOR
-    [Header ("Array consisting of multiple arrays, 1 for every mesh accesed by meshIndex multiplied by perMeshArraySize")]
+    [Header ("Array consisting of multiple arrays, 1 for every mesh accesed by meshId multiplied by perMeshArraySize")]
     [SerializeField] private Matrix4x4[] DEBUG_matrices;
+
+    [Header("Same as above, but only the matrices that are currently visible in camera frustum")]
+    [SerializeField] private Matrix4x4[] DEBUG_visibleMeshMatrices;
 
     [Header("CellId to MatrixId")]
     [SerializeField] private int[] DEBUG_matrixKeys;

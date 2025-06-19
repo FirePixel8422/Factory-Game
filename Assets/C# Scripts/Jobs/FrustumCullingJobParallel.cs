@@ -6,7 +6,7 @@ using Unity.Mathematics;
 using UnityEngine;
 
 
-[BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
+[BurstCompile]
 public struct FrustumCullingJobParallel : IJobParallelFor
 {
     [ReadOnly][NoAlias] public Bounds meshBounds;
@@ -16,27 +16,27 @@ public struct FrustumCullingJobParallel : IJobParallelFor
     [ReadOnly][NoAlias] public int startIndex;
 
     [NativeDisableParallelForRestriction]
-    [WriteOnly][NoAlias] public NativeList<Matrix4x4>.ParallelWriter visibleMatrices;
+    [WriteOnly][NoAlias] public NativeList<Matrix4x4>.ParallelWriter culledMatrices;
 
 
-    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
+
     public void Execute(int index)
     {
-        Matrix4x4 targetMatrix = matrices[startIndex + index];
+        float4x4 targetMatrix = matrices[startIndex + index];
 
         FastAABB transformedBounds = TransformBounds(meshBounds, targetMatrix);
 
         //if mesh with targetMatrix is visible in the frustum, add it to visibleMatrices
         if (IsAABBInsideFrustum(frustumPlanes, transformedBounds))
         {
-            visibleMatrices.AddNoResize(targetMatrix);
+            culledMatrices.AddNoResize(targetMatrix);
         }
     }
 
-    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
+    
     private bool IsAABBInsideFrustum(NativeArray<FastFrustumPlane> planes, FastAABB bounds)
     {
-        for (int i = 0; i < planes.Length; i++)
+        for (int i = 0; i < 6; i++)
         {
             float3 normal = planes[i].normal;
             float distance = planes[i].distance;
@@ -57,14 +57,13 @@ public struct FrustumCullingJobParallel : IJobParallelFor
         return true;
     }
 
-    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
-    private FastAABB TransformBounds(Bounds localBounds, Matrix4x4 matrix)
+    private FastAABB TransformBounds(Bounds localBounds, float4x4 matrix)
     {
         float3 extents = localBounds.extents;
 
-        float3 axisX = matrix.MultiplyVector(new Vector3(extents.x, 0f, 0f));
-        float3 axisY = matrix.MultiplyVector(new Vector3(0f, extents.y, 0f));
-        float3 axisZ = matrix.MultiplyVector(new Vector3(0f, 0f, extents.z));
+        float3 axisX = math.mul(matrix, new float4(extents.x, 0f, 0f, 0f)).xyz;
+        float3 axisY = math.mul(matrix, new float4(0f, extents.y, 0f, 0f)).xyz;
+        float3 axisZ = math.mul(matrix, new float4(0f, 0f, extents.z, 0f)).xyz;
 
         float3 worldExtents = new float3(
             math.abs(axisX.x) + math.abs(axisY.x) + math.abs(axisZ.x),
@@ -72,6 +71,8 @@ public struct FrustumCullingJobParallel : IJobParallelFor
             math.abs(axisX.z) + math.abs(axisY.z) + math.abs(axisZ.z)
         );
 
-        return new FastAABB(matrix.MultiplyPoint3x4(localBounds.center), worldExtents * 2f);
+        float3 center = math.mul(matrix, new float4(localBounds.center.x, localBounds.center.y, localBounds.center.z, 1f)).xyz;
+
+        return new FastAABB(center, worldExtents * 2f);
     }
 }

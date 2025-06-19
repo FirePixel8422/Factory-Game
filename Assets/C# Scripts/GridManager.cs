@@ -1,11 +1,10 @@
-using Unity.Burst;
+using System.Runtime.CompilerServices;
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
 
 
-[BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
 public class GridManager : MonoBehaviour
 {
     [SerializeField] private InstanceRenderer instanceRenderer;
@@ -14,6 +13,9 @@ public class GridManager : MonoBehaviour
     [SerializeField] private Material mat;
 
     [SerializeField] private int meshId;
+
+    [Range(1, 25)]
+    [SerializeField] private int brushSize = 5;
 
     public int3 gridSize;
 
@@ -26,7 +28,6 @@ public class GridManager : MonoBehaviour
 
 
 
-    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
     private void Start()
     {
         int gridLength = gridSize.x * gridSize.y * gridSize.z;
@@ -41,7 +42,6 @@ public class GridManager : MonoBehaviour
 
     #region Setup Methods
 
-    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
     private void SetupInstanceRenderer(int gridLength)
     {
         int meshCount = meshObjs.Length;
@@ -55,7 +55,6 @@ public class GridManager : MonoBehaviour
         instanceRenderer = new InstanceRenderer(meshes, meshCount, mat, gridLength);
     }
 
-    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
     private void SetupGrid(int gridLength)
     {
         grid = new NativeArray<GridCell>(gridLength, Allocator.Persistent);
@@ -80,8 +79,6 @@ public class GridManager : MonoBehaviour
 
 
 
-
-    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
     private void OnUpdate()
     {
         if (Input.GetMouseButton(0))
@@ -102,107 +99,102 @@ public class GridManager : MonoBehaviour
 
     #region Player Input
 
-    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
-    private void OnLeftClick(Vector3 newMousPos)
+    private void OnLeftClick(Vector3 newMousePos)
     {
-        //if mouse hasnt moved, return
-        if (newMousPos == oldMousePos) return;
+        if (newMousePos == oldMousePos) return;
+        oldMousePos = newMousePos;
 
-        //save mousePos
-        oldMousePos = newMousPos;
-
-        //shoot ray to world from mouse
-        Ray ray = Camera.main.ScreenPointToRay(newMousPos);
+        Ray ray = Camera.main.ScreenPointToRay(newMousePos);
 
         if (Physics.Raycast(ray, out RaycastHit hit))
         {
-            //try get grid cell from hit world point
-            if (TryGetGridCellFromWorldPoint(hit.point, gridSize, out GridCell newCell))
+            if (TryGetGridCellFromWorldPoint(hit.point, gridSize, out GridCell centerCell))
             {
-                //if the cell is different than the currentSelected cell
-                if (newCell.IsEmpty && newCell.gridId != selectedGridCellGridId)
+                int3 centerPos = GridIdToGridPos(centerCell.gridId, gridSize);
+                int halfBrush = brushSize / 2;
+
+                for (int z = -halfBrush; z <= halfBrush; z++)
                 {
-                    //if a new cell is selected
-                    if (selectedGridCellGridId != -1)
+                    for (int x = -halfBrush; x <= halfBrush; x++)
                     {
-                        //get modify and save oldcell
-                        GridCell oldCell = grid[selectedGridCellGridId];
+                        int3 gridPos = centerPos + new int3(x, 0, z);
+                        if (!IsWithinGridBounds(gridPos)) continue;
 
-                        beltLineOrientation = GetCellOrientation(oldCell, newCell);
-                        oldCell.orientation = beltLineOrientation;
+                        int gridId = GridPosToGridId(gridPos, gridSize);
+                        GridCell cell = grid[gridId];
 
-                        SetMesh(meshId, selectedGridCellGridId, GridIdToWorldPos(oldCell.gridId), oldCell.orientation);
+                        if (cell.IsEmpty && gridId != selectedGridCellGridId)
+                        {
+                            if (selectedGridCellGridId != -1)
+                            {
+                                GridCell oldCell = grid[selectedGridCellGridId];
+                                beltLineOrientation = GetCellOrientation(oldCell, cell);
+                                oldCell.orientation = beltLineOrientation;
 
-                        grid[selectedGridCellGridId] = oldCell;
+                                SetMesh(meshId, selectedGridCellGridId, GridIdToWorldPos(oldCell.gridId), oldCell.orientation);
+                                grid[selectedGridCellGridId] = oldCell;
+                            }
+
+                            cell.type = CellType.Conveyor;
+                            cell.orientation = beltLineOrientation;
+
+                            selectedGridCellGridId = gridId;
+                            grid[gridId] = cell;
+
+                            SetMesh(meshId, gridId, GridIdToWorldPos(gridId), cell.orientation);
+                        }
                     }
-
-                    //modify and save new cell
-                    newCell.type = CellType.Conveyor;
-                    newCell.orientation = beltLineOrientation;
-
-                    selectedGridCellGridId = newCell.gridId;
-
-                    grid[selectedGridCellGridId] = newCell;
-
-                    SetMesh(meshId, selectedGridCellGridId, GridIdToWorldPos(selectedGridCellGridId), newCell.orientation);
                 }
             }
         }
     }
 
 
-    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
-    private void OnRightClick(Vector3 newMousPos)
+    private void OnRightClick(Vector3 newMousePos)
     {
-        //if mouse hasnt moved, return
-        if (newMousPos == oldMousePos) return;
+        if (newMousePos == oldMousePos) return;
+        oldMousePos = newMousePos;
 
-        //save mousePos
-        oldMousePos = newMousPos;
-
-        //shoot ray to world from mouse
-        Ray ray = Camera.main.ScreenPointToRay(newMousPos);
+        Ray ray = Camera.main.ScreenPointToRay(newMousePos);
 
         if (Physics.Raycast(ray, out RaycastHit hit))
         {
-            //try get grid cell from hit world point
-            if (TryGetGridCellFromWorldPoint(hit.point, gridSize, out GridCell targetCell))
+            if (TryGetGridCellFromWorldPoint(hit.point, gridSize, out GridCell centerCell))
             {
-                //if the cell is different than the currentSelected cell
-                if (targetCell.IsEmpty == false)
+                int3 centerPos = GridIdToGridPos(centerCell.gridId, gridSize);
+                int halfBrush = brushSize / 2;
+
+                for (int z = -halfBrush; z <= halfBrush; z++)
                 {
-                    //reset cell
-                    grid[targetCell.gridId] = new GridCell(targetCell.gridId);
+                    for (int x = -halfBrush; x <= halfBrush; x++)
+                    {
+                        int3 gridPos = centerPos + new int3(x, 0, z);
+                        if (!IsWithinGridBounds(gridPos)) continue;
 
-                    selectedGridCellGridId = -1;
+                        int gridId = GridPosToGridId(gridPos, gridSize);
+                        GridCell cell = grid[gridId];
 
-                    RemoveMesh(targetCell.gridId);
+                        if (!cell.IsEmpty)
+                        {
+                            grid[gridId] = new GridCell(gridId);
+                            RemoveMesh(gridId);
+                        }
+                    }
                 }
+
+                selectedGridCellGridId = -1;
             }
         }
     }
+
 
     #endregion
-
-    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
-    public void SetMesh(int meshId, int cellId, float3 pos, CellOrientation orientation)
-    {
-        Matrix4x4 matrix = Matrix4x4.TRS(pos, Quaternion.Euler(0, (int)orientation * 90, 0), Vector3.one);
-        instanceRenderer.SetMeshInstanceMatrix(meshId, cellId, matrix);
-    }
-
-    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
-    public void RemoveMesh(int cellId)
-    {
-        instanceRenderer.RemoveMeshInstanceMatrix(cellId);
-    }
-
 
 
 
     #region Helper Methods
 
-    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryGetGridCellFromWorldPoint(float3 worldPosition, int3 gridSize, out GridCell gridCell)
     {
         float percentX = (worldPosition.x + gridSize.x * 0.5F) / gridSize.x;
@@ -222,7 +214,7 @@ public class GridManager : MonoBehaviour
     }
 
 
-    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     /// <summary>
     /// Convert int gridId to int3 gridPos
     /// </summary>
@@ -234,17 +226,17 @@ public class GridManager : MonoBehaviour
         return new int3(x, y, z);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     /// <summary>
     /// Convert int3 gridPos to int gridId
     /// </summary>
-    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
     private int GridPosToGridId(int3 gridPos, int3 gridSize)
     {
         return gridPos.x + gridPos.y * gridSize.x + gridPos.z * gridSize.x * gridSize.y;
     }
 
 
-    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public float3 GridIdToWorldPos(int gridId)
     {
         int3 gridPos = GridIdToGridPos(gridId, gridSize);
@@ -256,7 +248,16 @@ public class GridManager : MonoBehaviour
         return worldPos;
     }
 
-    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool IsWithinGridBounds(int3 gridPos)
+    {
+        return gridPos.x >= 0 && gridPos.x < gridSize.x &&
+               gridPos.y >= 0 && gridPos.y < gridSize.y &&
+               gridPos.z >= 0 && gridPos.z < gridSize.z;
+    }
+
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public CellOrientation GetCellOrientation(GridCell cellA, GridCell cellB)
     {
         int3 posA = GridIdToGridPos(cellA.gridId, gridSize);
@@ -275,6 +276,19 @@ public class GridManager : MonoBehaviour
 
     #endregion
 
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void SetMesh(int meshId, int cellId, float3 pos, CellOrientation orientation)
+    {
+        Matrix4x4 matrix = Matrix4x4.TRS(pos, Quaternion.Euler(0, (int)orientation * 90, 0), Vector3.one);
+        instanceRenderer.SetMeshInstanceMatrix(meshId, cellId, matrix);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void RemoveMesh(int cellId)
+    {
+        instanceRenderer.RemoveMeshInstanceMatrix(cellId);
+    }
 
 
     private void OnDestroy()
@@ -295,7 +309,6 @@ public class GridManager : MonoBehaviour
 
     [SerializeField] private bool drawGrid;
 
-    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
     private void OnDrawGizmos()
     {
         Gizmos.DrawWireCube(new Vector3(0, (float)(gridSize.y * 0.5f) - 0.5f, 0), new Vector3(gridSize.x, gridSize.y, gridSize.z));
