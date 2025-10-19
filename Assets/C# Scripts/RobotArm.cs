@@ -17,7 +17,7 @@ public class RobotArm : MonoBehaviour
         joints = GetComponentsInChildren<Joint>();
         currentIKTarget = target.position;
 
-        UpdateScheduler.Register(OnUpdate);
+        UpdateScheduler.RegisterUpdate(OnUpdate);
     }
 
     private void OnUpdate()
@@ -78,6 +78,6 @@ public class RobotArm : MonoBehaviour
 
     private void OnDestroy()
     {
-        UpdateScheduler.Unregister(OnUpdate);
+        UpdateScheduler.UnregisterUpdate(OnUpdate);
     }
 }

@@ -36,7 +36,7 @@ public class GridManager : MonoBehaviour
 
         SetupGrid(gridLength);
 
-        UpdateScheduler.Register(OnUpdate);
+        UpdateScheduler.RegisterUpdate(OnUpdate);
     }
 
 
@@ -300,7 +300,7 @@ public class GridManager : MonoBehaviour
 
         instanceRenderer?.Dispose();
 
-        UpdateScheduler.Unregister(OnUpdate);
+        UpdateScheduler.UnregisterUpdate(OnUpdate);
     }
 
 

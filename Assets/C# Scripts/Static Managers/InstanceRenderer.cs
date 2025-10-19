@@ -28,7 +28,7 @@ public class InstanceRenderer
 
         SetupMatrixData();
 
-        UpdateScheduler.Register(OnUpdate);
+        UpdateScheduler.RegisterUpdate(OnUpdate);
     }
 
     
@@ -178,7 +178,7 @@ public class InstanceRenderer
     private void RenderMeshInstance(int meshId)
     {
         //render the instances of currentmesh
-        Graphics.RenderMeshInstanced(renderParams, meshes[meshId], 0, culledInstanceMatrices.AsArray());
+        Graphics.RenderMeshInstanced(renderParams, meshes[meshId], 0, culledInstanceMatrices.AsArray());    
     }
 
 
@@ -251,7 +251,7 @@ public class InstanceRenderer
         culledInstanceMatrices.Dispose();
         frustumPlanes.Dispose();
 
-        UpdateScheduler.Unregister(OnUpdate);
+        UpdateScheduler.UnregisterUpdate(OnUpdate);
     }
 
 

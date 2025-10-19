@@ -1,37 +1,66 @@
 using System;
-using System.Collections;
 using UnityEngine;
 
 public static class UpdateScheduler
 {
-    private static event Action OnUpdate;
+    private static Action OnUpdate;
+    private static Action OnFixedUpdate;
 
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Initialize()
     {
-        GameManager.Instance.StartCoroutine(UpdateLoop());
+        UpdateCallbackManager gameManager = new GameObject("GameManager").AddComponent<UpdateCallbackManager>();
+
+        GameObject.DontDestroyOnLoad(gameManager.gameObject);
     }
 
 
-    public static void Register(Action action)
+    /// <summary>
+    /// Register a method to call every frame like Update()
+    /// </summary>
+    public static void RegisterUpdate(Action action)
     {
         OnUpdate += action;
     }
-
-    public static void Unregister(Action action)
+    /// <summary>
+    /// Unregister a registerd method for Update()
+    /// </summary>
+    public static void UnregisterUpdate(Action action)
     {
         OnUpdate -= action;
     }
 
-
-    private static IEnumerator UpdateLoop()
+    /// <summary>
+    /// Register a method to call every frame like FixedUpdate()
+    /// </summary>
+    public static void RegisterFixedUpdate(Action action)
     {
-        while (true)
-        {
-            yield return null;
+        OnFixedUpdate += action;
+    }
+    /// <summary>
+    /// Unregister a registerd method for FixedUpdate()
+    /// </summary>
+    public static void UnregisterFixedUpdate(Action action)
+    {
+        OnFixedUpdate -= action;
+    }
 
+
+
+    /// <summary>
+    /// Handle Update Callbacks and batch them for every script by an event based register system
+    /// </summary>
+    private class UpdateCallbackManager : MonoBehaviour
+    {
+        private void Update()
+        {
             OnUpdate?.Invoke();
+        }
+
+        private void FixedUpdate()
+        {
+            OnFixedUpdate?.Invoke();
         }
     }
 }
